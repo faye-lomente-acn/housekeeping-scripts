@@ -9,18 +9,33 @@ CLEANED_COLUMN = "Cleaned CollinsOrOtherPartyContractID"
 
 PPE_PATTERN = re.compile(r"PPE\d+=\d+", re.IGNORECASE)
 ADSA_PATTERN = re.compile(r"ADSA#\s*A\d+", re.IGNORECASE)
+NUMERIC_SUFFIX_PATTERN = re.compile(r"^(\d+),\s*\d+$")
+FA_CONTRACT_PATTERN = re.compile(
+    r"^([A-Z]{2}\d{4}-\d{2}-[A-Z]-\d{4})(-P\d+)?$", re.IGNORECASE
+)
 
 
 def clean_contract_id(value):
     if not isinstance(value, str):
         return value
     stripped = value.strip()
+
     adsa_match = ADSA_PATTERN.search(stripped)
     if adsa_match:
-        return stripped[adsa_match.start():]
+        return stripped[adsa_match.start() :].replace(";", ",")
+
     ppe_match = PPE_PATTERN.search(stripped)
     if ppe_match:
-        return ppe_match.group(0)
+        return ppe_match.group(0).replace(";", ",")
+
+    numeric_match = NUMERIC_SUFFIX_PATTERN.match(stripped)
+    if numeric_match:
+        return numeric_match.group(1).replace(";", ",")
+
+    fa_match = FA_CONTRACT_PATTERN.match(stripped)
+    if fa_match:
+        return fa_match.group(1)
+
     return value
 
 
