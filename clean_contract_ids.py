@@ -7,9 +7,7 @@ import pandas as pd
 COLUMN = "CollinsOrOtherPartyContractID"
 CLEANED_COLUMN = "Cleaned CollinsOrOtherPartyContractID"
 
-# Finds {prefix} [-] MSA[2]-SOF anywhere in a string.
-# Handles: surrounding text, spaces around dash, missing dash, MSA-SOF vs MSA2-SOF.
-PATTERN = re.compile(r"([\w+]+)\s*-?\s*(MSA\d*-SOF)", re.IGNORECASE)
+PATTERN = re.compile(r"PPE\d+=\d+", re.IGNORECASE)
 
 
 def clean_contract_id(value):
@@ -17,9 +15,7 @@ def clean_contract_id(value):
         return value
     match = PATTERN.search(value.strip())
     if match:
-        prefix = match.group(1).rstrip("+")
-        suffix = match.group(2).upper()
-        return f"{prefix}-{suffix}"
+        return match.group(0)
     return value
 
 
