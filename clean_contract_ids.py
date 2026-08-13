@@ -45,7 +45,7 @@ def process_file(input_path: str) -> Path:
 
     df.insert(col_idx + 1, CLEANED_COLUMN, cleaned)  # type: ignore
 
-    output_dir = path.parent / "output"
+    output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / f"{path.stem}_cleaned{path.suffix}"
     if ext == ".xlsx":
