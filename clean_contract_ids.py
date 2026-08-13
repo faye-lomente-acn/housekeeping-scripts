@@ -7,16 +7,19 @@ import pandas as pd
 COLUMN = "CollinsOrOtherPartyContractID"
 CLEANED_COLUMN = "Cleaned CollinsOrOtherPartyContractID"
 
-# Matches: <prefix> (optional space) -MSA2-SOF <space> <digits>
-PATTERN = re.compile(r"^(.*?)\s*-MSA2-SOF\s+\d+$", re.IGNORECASE)
+# Finds {prefix} [-] MSA[2]-SOF anywhere in a string.
+# Handles: surrounding text, spaces around dash, missing dash, MSA-SOF vs MSA2-SOF.
+PATTERN = re.compile(r"([\w+]+)\s*-?\s*(MSA\d*-SOF)", re.IGNORECASE)
 
 
 def clean_contract_id(value):
     if not isinstance(value, str):
         return value
-    match = PATTERN.match(value.strip())
+    match = PATTERN.search(value.strip())
     if match:
-        return f"{match.group(1)}-MSA2-SOF"
+        prefix = match.group(1).rstrip("+")
+        suffix = match.group(2).upper()
+        return f"{prefix}-{suffix}"
     return value
 
 
@@ -42,7 +45,9 @@ def process_file(input_path: str) -> Path:
 
     df.insert(col_idx + 1, CLEANED_COLUMN, cleaned)  # type: ignore
 
-    output_path = path.parent / f"{path.stem}_cleaned{path.suffix}"
+    output_dir = path.parent / "output"
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / f"{path.stem}_cleaned{path.suffix}"
     if ext == ".xlsx":
         df.to_excel(output_path, index=False)
     else:
