@@ -7,15 +7,20 @@ import pandas as pd
 COLUMN = "CollinsOrOtherPartyContractID"
 CLEANED_COLUMN = "Cleaned CollinsOrOtherPartyContractID"
 
-PATTERN = re.compile(r"PPE\d+=\d+", re.IGNORECASE)
+PPE_PATTERN = re.compile(r"PPE\d+=\d+", re.IGNORECASE)
+ADSA_PATTERN = re.compile(r"ADSA#\s*A\d+", re.IGNORECASE)
 
 
 def clean_contract_id(value):
     if not isinstance(value, str):
         return value
-    match = PATTERN.search(value.strip())
-    if match:
-        return match.group(0)
+    stripped = value.strip()
+    adsa_match = ADSA_PATTERN.search(stripped)
+    if adsa_match:
+        return stripped[adsa_match.start():]
+    ppe_match = PPE_PATTERN.search(stripped)
+    if ppe_match:
+        return ppe_match.group(0)
     return value
 
 
