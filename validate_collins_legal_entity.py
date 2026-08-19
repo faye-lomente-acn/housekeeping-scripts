@@ -30,10 +30,17 @@ OUTPUT_COLS = [
 
 def load_extraction(path: str, sheet_name: str) -> pd.DataFrame:
     df = pd.read_excel(path, sheet_name=sheet_name, dtype=str)
-    required = [EXTRACTION_BLOB_COL, EXTRACTION_ROWKEY_COL, EXTRACTION_NAME_COL, EXTRACTION_ADDRESS_COL]
+    required = [
+        EXTRACTION_BLOB_COL,
+        EXTRACTION_ROWKEY_COL,
+        EXTRACTION_NAME_COL,
+        EXTRACTION_ADDRESS_COL,
+    ]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(f"Extraction file missing columns {missing}. Available: {list(df.columns)}")
+        raise ValueError(
+            f"Extraction file missing columns {missing}. Available: {list(df.columns)}"
+        )
     return df
 
 
@@ -42,7 +49,9 @@ def load_unique_values(path: str, sheet_name: str) -> pd.DataFrame:
     required = [UNIQUE_VALUES_NAME_COL, UNIQUE_VALUES_MAPPED_COL]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(f"Unique values sheet missing columns {missing}. Available: {list(df.columns)}")
+        raise ValueError(
+            f"Unique values sheet missing columns {missing}. Available: {list(df.columns)}"
+        )
     df[UNIQUE_VALUES_NAME_COL] = df[UNIQUE_VALUES_NAME_COL].str.strip()
     df[UNIQUE_VALUES_MAPPED_COL] = df[UNIQUE_VALUES_MAPPED_COL].str.strip()
     return df
@@ -53,7 +62,9 @@ def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
     required = [ICM_DROPDOWN_COL, ICM_CANONICAL_NAME_COL, ICM_ADDRESS_COL]
     missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(f"ICM sheet missing columns {missing}. Available: {list(df.columns)}")
+        raise ValueError(
+            f"ICM sheet missing columns {missing}. Available: {list(df.columns)}"
+        )
     df[ICM_DROPDOWN_COL] = df[ICM_DROPDOWN_COL].str.strip()
     df[ICM_CANONICAL_NAME_COL] = df[ICM_CANONICAL_NAME_COL].str.strip()
     df[ICM_ADDRESS_COL] = df[ICM_ADDRESS_COL].str.strip()
@@ -64,7 +75,9 @@ def lookup_mapped_name(extracted_name: str, unique_values_df: pd.DataFrame) -> s
     normalized = extracted_name.strip().lower()
     if not normalized:
         return ""
-    match = unique_values_df[unique_values_df[UNIQUE_VALUES_NAME_COL].str.lower() == normalized]
+    match = unique_values_df[
+        unique_values_df[UNIQUE_VALUES_NAME_COL].str.lower() == normalized
+    ]
     if match.empty:
         return ""
     return match.iloc[0][UNIQUE_VALUES_MAPPED_COL]
@@ -78,13 +91,19 @@ def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
     canonical_name = rows.iloc[0][ICM_CANONICAL_NAME_COL]
     unique_addresses = rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().unique()
     if len(unique_addresses) <= 1:
-        address = rows[ICM_ADDRESS_COL].dropna().iloc[0] if not rows[ICM_ADDRESS_COL].dropna().empty else ""
+        address = (
+            rows[ICM_ADDRESS_COL].dropna().iloc[0]
+            if not rows[ICM_ADDRESS_COL].dropna().empty
+            else ""
+        )
     else:
         address = MULTIPLE_ADDRESSES
     return (canonical_name, address)
 
 
-def validate_entity(extraction_df: pd.DataFrame, unique_values_df: pd.DataFrame, icm_df: pd.DataFrame) -> pd.DataFrame:
+def validate_entity(
+    extraction_df: pd.DataFrame, unique_values_df: pd.DataFrame, icm_df: pd.DataFrame
+) -> pd.DataFrame:
     records = []
     matched = 0
     hop1_misses = 0
@@ -133,7 +152,13 @@ def validate_entity(extraction_df: pd.DataFrame, unique_values_df: pd.DataFrame,
     return pd.DataFrame(records, columns=OUTPUT_COLS)
 
 
-def run(extraction_path: str, extraction_sheet: str, masterlist_path: str, unique_values_sheet: str, icm_sheet: str) -> Path:
+def run(
+    extraction_path: str,
+    extraction_sheet: str,
+    masterlist_path: str,
+    unique_values_sheet: str,
+    icm_sheet: str,
+) -> Path:
     extraction_df = load_extraction(extraction_path, extraction_sheet)
     unique_values_df = load_unique_values(masterlist_path, unique_values_sheet)
     icm_df = load_icm(masterlist_path, icm_sheet)
@@ -150,15 +175,37 @@ def run(extraction_path: str, extraction_sheet: str, masterlist_path: str, uniqu
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Validate Collins Legal Entity names and addresses against the masterlist.")
-    parser.add_argument("extraction", help="Path to the attribute extraction Excel file.")
+    parser = argparse.ArgumentParser(
+        description="Validate Collins Legal Entity names and addresses against the masterlist."
+    )
+    parser.add_argument(
+        "extraction", help="Path to the attribute extraction Excel file."
+    )
     parser.add_argument("masterlist", help="Path to the masterlist Excel file.")
-    parser.add_argument("--extraction-sheet", default="Execution Report", help="Sheet name in the extraction file (default: 'Execution Report').")
-    parser.add_argument("--unique-values-sheet", default="Collins Legal Unique Values", help="Sheet name for the unique values mapping (default: 'Collins Legal Unique Values').")
-    parser.add_argument("--masterlist-sheet", default="ICMCollinsLegalEntityMaster", help="Sheet name for the ICM master data (default: 'ICMCollinsLegalEntityMaster').")
+    parser.add_argument(
+        "--extraction-sheet",
+        default="Execution Report",
+        help="Sheet name in the extraction file (default: 'Execution Report').",
+    )
+    parser.add_argument(
+        "--unique-values-sheet",
+        default="Collins Legal Unique values",
+        help="Sheet name for the unique values mapping (default: 'Collins Legal Unique Values').",
+    )
+    parser.add_argument(
+        "--masterlist-sheet",
+        default="ICMCollinsLegalEntityMaster",
+        help="Sheet name for the ICM master data (default: 'ICMCollinsLegalEntityMaster').",
+    )
     args = parser.parse_args()
     try:
-        run(args.extraction, args.extraction_sheet, args.masterlist, args.unique_values_sheet, args.masterlist_sheet)
+        run(
+            args.extraction,
+            args.extraction_sheet,
+            args.masterlist,
+            args.unique_values_sheet,
+            args.masterlist_sheet,
+        )
     except (ValueError, FileNotFoundError) as e:
         print(f"Error: {e}")
         sys.exit(1)
