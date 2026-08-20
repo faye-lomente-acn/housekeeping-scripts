@@ -78,7 +78,8 @@ def lookup_mapped_name(extracted_name: str, unique_values_df: pd.DataFrame) -> s
     ]
     if match.empty:
         return ""
-    return match.iloc[0][UNIQUE_VALUES_MAPPED_COL]
+    value = match.iloc[0][UNIQUE_VALUES_MAPPED_COL]
+    return value if isinstance(value, str) else ""
 
 
 def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
