@@ -1,5 +1,6 @@
 import argparse
 import difflib
+import re
 import sys
 from pathlib import Path
 
@@ -19,6 +20,50 @@ ICM_ADDRESS_COL = "Collins Legal Entity Full Address"
 MULTIPLE_ADDRESSES = "Multiple Addresses"
 
 DIFF_COL = "Different from Extracted"
+
+_KNOWN_COUNTRIES = frozenset({
+    "united states", "usa", "us", "canada", "mexico",
+    "united kingdom", "uk", "gb", "great britain",
+    "england", "scotland", "wales", "northern ireland",
+    "germany", "france", "italy", "spain", "netherlands",
+    "holland", "belgium", "switzerland", "austria",
+    "ireland", "luxembourg", "portugal", "denmark",
+    "sweden", "norway", "finland",
+    "poland", "czech republic", "czechia", "slovakia",
+    "hungary", "romania", "bulgaria", "croatia",
+    "serbia", "ukraine", "greece",
+    "israel", "saudi arabia", "uae", "united arab emirates",
+    "turkey", "egypt", "south africa", "qatar", "kuwait", "bahrain", "jordan",
+    "india", "china", "japan", "south korea", "korea",
+    "singapore", "australia", "new zealand",
+    "malaysia", "thailand", "indonesia", "philippines",
+    "taiwan", "hong kong", "vietnam",
+    "brazil", "argentina", "colombia", "chile", "peru",
+})
+
+_US_STATES = frozenset({
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+})
+
+_ZIP_PATTERNS = [
+    re.compile(r"\d{5}(-\d{4})?"),                      # US: 12345 or 12345-6789
+    re.compile(r"[a-z]{1,2}\d[a-z\d]?\s?\d[a-z]{2}"),  # UK: sw1a 2aa
+    re.compile(r"[a-z]\d[a-z]\s?\d[a-z]\d"),            # Canada: a1b 2c3
+    re.compile(r"\d{4}\s[a-z]{2}"),                     # Netherlands: 1234 ab
+    re.compile(r"\d{4,6}"),                              # General: AU/NZ/BE/AT/CH
+]
+
+_RE_STATE_ZIP_COMBO = re.compile(r"^([a-z]{2})\s+(\d{5}(?:-\d{4})?)$")
+
+_COMPONENT_WEIGHTS = {"zip": 0.35, "country": 0.20, "state": 0.10, "remainder": 0.35}
+
+# Country and state are well-defined codes — partial fuzzy credit would let
+# "United Kingdom" vs "United States" score near 1.0. Exact match only.
+_EXACT_MATCH_COMPONENTS = {"country", "state"}
 
 OUTPUT_COLS = [
     EXTRACTION_BLOB_COL,
@@ -73,6 +118,87 @@ def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
     return df
 
 
+def _normalize_address(text: str) -> str:
+    text = re.sub(r"[\r\n]+", ", ", text.strip())
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\s*,\s*", ", ", text)
+    return text.strip().lower()
+
+
+def _parse_address_components(address: str) -> dict:
+    tokens = [t.strip() for t in address.split(",") if t.strip()]
+    used = set()
+    zip_val = country_val = state_val = ""
+
+    for i in range(len(tokens) - 1, -1, -1):
+        tok = tokens[i]
+
+        if not country_val and tok in _KNOWN_COUNTRIES:
+            country_val = tok
+            used.add(i)
+            continue
+
+        if not zip_val or not state_val:
+            m = _RE_STATE_ZIP_COMBO.fullmatch(tok)
+            if m and m.group(1).upper() in _US_STATES:
+                if not state_val:
+                    state_val = m.group(1)
+                if not zip_val:
+                    zip_val = m.group(2)
+                used.add(i)
+                continue
+
+        if not zip_val:
+            if any(p.fullmatch(tok) for p in _ZIP_PATTERNS):
+                zip_val = tok
+                used.add(i)
+                continue
+
+        if not state_val and len(tok) == 2 and tok.upper() in _US_STATES:
+            state_val = tok
+            used.add(i)
+
+    remainder = ", ".join(t for j, t in enumerate(tokens) if j not in used)
+    return {"zip": zip_val, "country": country_val, "state": state_val, "remainder": remainder}
+
+
+def _component_similarity(a: str, b: str) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def address_similarity(a: str, b: str) -> float:
+    norm_a = _normalize_address(a)
+    norm_b = _normalize_address(b)
+    comp_a = _parse_address_components(norm_a)
+    comp_b = _parse_address_components(norm_b)
+
+    if all(not v for v in comp_a.values()) and all(not v for v in comp_b.values()):
+        return difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
+
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for key, weight in _COMPONENT_WEIGHTS.items():
+        val_a = comp_a[key]
+        val_b = comp_b[key]
+        if not val_a and not val_b:
+            continue
+        total_weight += weight
+        if key in _EXACT_MATCH_COMPONENTS:
+            sim = 1.0 if val_a == val_b else 0.0
+        else:
+            sim = _component_similarity(val_a, val_b)
+        weighted_sum += weight * sim
+
+    if total_weight == 0.0:
+        return difflib.SequenceMatcher(None, norm_a, norm_b).ratio()
+
+    return weighted_sum / total_weight
+
+
 def compute_diff_col(name: str, extracted: str, icm: str) -> str:
     has_name = isinstance(name, str) and bool(name.strip())
     a = extracted.strip() if isinstance(extracted, str) else ""
@@ -81,7 +207,9 @@ def compute_diff_col(name: str, extracted: str, icm: str) -> str:
         return ""
     if has_name and not a and not b:
         return "Empty Address"
-    ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    if b == MULTIPLE_ADDRESSES:
+        return "Yes"
+    ratio = address_similarity(a, b)
     return "No" if ratio >= 0.85 else "Yes"
 
 
