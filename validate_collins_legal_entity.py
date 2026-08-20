@@ -12,8 +12,7 @@ EXTRACTION_ADDRESS_COL = "CollinsLegalEntity1FullAddress"
 UNIQUE_VALUES_NAME_COL = "CollinsLegalEntity1Name"
 UNIQUE_VALUES_MAPPED_COL = "To be mapped Collins Legal Entity"
 
-ICM_DROPDOWN_COL = "Legal Entity Company Name Visible in Dropdown"
-ICM_CANONICAL_NAME_COL = "Collins Legal Entity Company Name Visible in Dropdown"
+ICM_DROPDOWN_COL = "Collins Legal Entity Company Name Visible in Dropdown"
 ICM_ADDRESS_COL = "Collins Legal Entity Full Address"
 
 MULTIPLE_ADDRESSES = "Multiple Addresses"
@@ -23,7 +22,7 @@ OUTPUT_COLS = [
     EXTRACTION_ROWKEY_COL,
     EXTRACTION_NAME_COL,
     EXTRACTION_ADDRESS_COL,
-    ICM_CANONICAL_NAME_COL,
+    ICM_DROPDOWN_COL,
     ICM_ADDRESS_COL,
 ]
 
@@ -59,14 +58,13 @@ def load_unique_values(path: str, sheet_name: str) -> pd.DataFrame:
 
 def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
     df = pd.read_excel(path, sheet_name=sheet_name, dtype=str)
-    required = [ICM_DROPDOWN_COL, ICM_CANONICAL_NAME_COL, ICM_ADDRESS_COL]
+    required = [ICM_DROPDOWN_COL, ICM_ADDRESS_COL]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
             f"ICM sheet missing columns {missing}. Available: {list(df.columns)}"
         )
     df[ICM_DROPDOWN_COL] = df[ICM_DROPDOWN_COL].str.strip()
-    df[ICM_CANONICAL_NAME_COL] = df[ICM_CANONICAL_NAME_COL].str.strip()
     df[ICM_ADDRESS_COL] = df[ICM_ADDRESS_COL].str.strip()
     return df
 
@@ -88,7 +86,7 @@ def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
     rows = icm_df[icm_df[ICM_DROPDOWN_COL].str.lower() == normalized]
     if rows.empty:
         return ("", "")
-    canonical_name = rows.iloc[0][ICM_CANONICAL_NAME_COL]
+    canonical_name = rows.iloc[0][ICM_DROPDOWN_COL]
     unique_addresses = rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().unique()
     if len(unique_addresses) <= 1:
         address = (
@@ -116,7 +114,7 @@ def validate_entity(
             EXTRACTION_ROWKEY_COL: row[EXTRACTION_ROWKEY_COL],
             EXTRACTION_NAME_COL: row[EXTRACTION_NAME_COL],
             EXTRACTION_ADDRESS_COL: row[EXTRACTION_ADDRESS_COL],
-            ICM_CANONICAL_NAME_COL: "",
+            ICM_DROPDOWN_COL: "",
             ICM_ADDRESS_COL: "",
         }
 
@@ -139,7 +137,7 @@ def validate_entity(
             continue
 
         matched += 1
-        base[ICM_CANONICAL_NAME_COL] = canonical_name
+        base[ICM_DROPDOWN_COL] = canonical_name
         base[ICM_ADDRESS_COL] = address
         records.append(base)
 
