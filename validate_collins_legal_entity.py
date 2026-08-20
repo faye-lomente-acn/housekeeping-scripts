@@ -73,10 +73,13 @@ def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
     return df
 
 
-def compare_addresses(extracted: str, icm: str) -> str:
+def compute_diff_col(name: str, extracted: str, icm: str) -> str:
+    has_name = isinstance(name, str) and bool(name.strip())
     a = extracted.strip() if isinstance(extracted, str) else ""
     b = icm.strip() if isinstance(icm, str) else ""
-    if not a and not b:
+    if not has_name and not a and not b:
+        return ""
+    if has_name and not a and not b:
         return "Empty Address"
     ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
     return "No" if ratio >= 0.85 else "Yes"
@@ -136,28 +139,28 @@ def validate_entity(
         raw_name = row[EXTRACTION_NAME_COL]
         if not isinstance(raw_name, str) or not raw_name.strip():
             null_name += 1
-            base[DIFF_COL] = compare_addresses(base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
             records.append(base)
             continue
 
         mapped_name = lookup_mapped_name(raw_name, unique_values_df)
         if not mapped_name:
             hop1_misses += 1
-            base[DIFF_COL] = compare_addresses(base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
             records.append(base)
             continue
 
         canonical_name, address = resolve_icm(mapped_name, icm_df)
         if not canonical_name:
             hop2_misses += 1
-            base[DIFF_COL] = compare_addresses(base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
             records.append(base)
             continue
 
         matched += 1
         base[ICM_DROPDOWN_COL] = canonical_name
         base[ICM_ADDRESS_COL] = address
-        base[DIFF_COL] = compare_addresses(base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+        base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
         records.append(base)
 
     print(f"Extraction rows       : {len(extraction_df)}")
