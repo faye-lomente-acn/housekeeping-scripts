@@ -129,7 +129,10 @@ def validate_entity(
     hop2_misses = 0
     null_name = 0
 
-    for _, row in extraction_df.iterrows():
+    total = len(extraction_df)
+    for i, (_, row) in enumerate(extraction_df.iterrows(), start=1):
+        if i == 1 or i % 500 == 0 or i == total:
+            logger.info(f"  Processing row {i}/{total}...")
         base = {
             EXTRACTION_BLOB_COL: row[EXTRACTION_BLOB_COL],
             EXTRACTION_ROWKEY_COL: row[EXTRACTION_ROWKEY_COL],
@@ -200,10 +203,25 @@ def run(
     icm_sheet: str,
 ) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    extraction_df = load_extraction(extraction_path, extraction_sheet)
-    unique_values_df = load_unique_values(masterlist_path, unique_values_sheet)
-    icm_df = load_icm(masterlist_path, icm_sheet)
+    logger.info("=" * 50)
+    logger.info("Collins Legal Entity Validator")
+    logger.info(f"Extraction : {extraction_path}  [{extraction_sheet}]")
+    logger.info(f"Masterlist : {masterlist_path}  [{unique_values_sheet} | {icm_sheet}]")
+    logger.info("=" * 50)
 
+    logger.info("Loading extraction file...")
+    extraction_df = load_extraction(extraction_path, extraction_sheet)
+    logger.info(f"  {len(extraction_df)} rows loaded.")
+
+    logger.info("Loading masterlist (unique values)...")
+    unique_values_df = load_unique_values(masterlist_path, unique_values_sheet)
+    logger.info(f"  {len(unique_values_df)} rows loaded.")
+
+    logger.info("Loading masterlist (ICM)...")
+    icm_df = load_icm(masterlist_path, icm_sheet)
+    logger.info(f"  {len(icm_df)} rows loaded.")
+
+    logger.info("Running validation...")
     output_df = validate_entity(extraction_df, unique_values_df, icm_df)
 
     metadata = pd.DataFrame(
