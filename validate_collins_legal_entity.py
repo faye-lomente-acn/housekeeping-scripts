@@ -109,7 +109,13 @@ def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
         return ("", "")
     canonical_name = rows.iloc[0][ICM_DROPDOWN_COL]
     unique_addresses = rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().unique()
-    if len(unique_addresses) <= 1:
+    CORP_TRUST = "the corporation trust company"
+    non_trust = rows[ICM_ADDRESS_COL].dropna()[
+        ~rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().str.contains(CORP_TRUST, regex=False)
+    ]
+    if len(unique_addresses) == 2 and len(non_trust) > 0 and len(non_trust) < len(rows[ICM_ADDRESS_COL].dropna()):
+        address = non_trust.iloc[0]
+    elif len(unique_addresses) <= 1:
         address = (
             rows[ICM_ADDRESS_COL].dropna().iloc[0]
             if not rows[ICM_ADDRESS_COL].dropna().empty
