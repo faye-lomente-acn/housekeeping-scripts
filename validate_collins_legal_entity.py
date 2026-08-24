@@ -238,7 +238,30 @@ if __name__ == "__main__":
         default="ICMCollinsLegalEntityMaster",
         help="Sheet name for the ICM master data (default: 'ICMCollinsLegalEntityMaster').",
     )
+    parser.add_argument(
+        "--extraction-name-col",
+        default="CollinsLegalEntity1Name",
+        help="Column name for the extracted legal entity name (default: 'CollinsLegalEntity1Name').",
+    )
+    parser.add_argument(
+        "--extraction-address-col",
+        default="CollinsLegalEntity1FullAddress",
+        help="Column name for the extracted legal entity address (default: 'CollinsLegalEntity1FullAddress').",
+    )
     args = parser.parse_args()
+
+    EXTRACTION_NAME_COL = args.extraction_name_col
+    EXTRACTION_ADDRESS_COL = args.extraction_address_col
+    OUTPUT_COLS[:] = [
+        EXTRACTION_BLOB_COL,
+        EXTRACTION_ROWKEY_COL,
+        EXTRACTION_NAME_COL,
+        EXTRACTION_ADDRESS_COL,
+        ICM_DROPDOWN_COL,
+        ICM_ADDRESS_COL,
+        DIFF_COL,
+    ]
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
