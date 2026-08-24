@@ -206,10 +206,26 @@ def run(
 
     output_df = validate_entity(extraction_df, unique_values_df, icm_df)
 
+    metadata = pd.DataFrame(
+        [
+            {"Key": "Run Timestamp", "Value": timestamp},
+            {"Key": "Extraction File", "Value": str(extraction_path)},
+            {"Key": "Masterlist File", "Value": str(masterlist_path)},
+            {"Key": "Extraction Name Column", "Value": EXTRACTION_NAME_COL},
+            {"Key": "Extraction Address Column", "Value": EXTRACTION_ADDRESS_COL},
+            {"Key": "Unique Values Name Column", "Value": UNIQUE_VALUES_NAME_COL},
+            {"Key": "Unique Values Mapped Column", "Value": UNIQUE_VALUES_MAPPED_COL},
+            {"Key": "ICM Dropdown Column", "Value": ICM_DROPDOWN_COL},
+            {"Key": "ICM Address Column", "Value": ICM_ADDRESS_COL},
+        ]
+    )
+
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / f"{EXTRACTION_NAME_COL}_{timestamp}.xlsx"
-    output_df.to_excel(output_path, index=False)
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        output_df.to_excel(writer, sheet_name="Results", index=False)
+        metadata.to_excel(writer, sheet_name="Metadata", index=False)
 
     logger.info(f"Output saved to       : {output_path}")
     return output_path
