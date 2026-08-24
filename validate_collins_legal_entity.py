@@ -1,9 +1,13 @@
 import argparse
 import difflib
+import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 EXTRACTION_BLOB_COL = "InputBlobPath"
 EXTRACTION_ROWKEY_COL = "RowKey"
@@ -139,35 +143,51 @@ def validate_entity(
         raw_name = row[EXTRACTION_NAME_COL]
         if not isinstance(raw_name, str) or not raw_name.strip():
             null_name += 1
-            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(
+                base[EXTRACTION_NAME_COL],
+                base[EXTRACTION_ADDRESS_COL],
+                base[ICM_ADDRESS_COL],
+            )
             records.append(base)
             continue
 
         mapped_name = lookup_mapped_name(raw_name, unique_values_df)
         if not mapped_name:
             hop1_misses += 1
-            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(
+                base[EXTRACTION_NAME_COL],
+                base[EXTRACTION_ADDRESS_COL],
+                base[ICM_ADDRESS_COL],
+            )
             records.append(base)
             continue
 
         canonical_name, address = resolve_icm(mapped_name, icm_df)
         if not canonical_name:
             hop2_misses += 1
-            base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+            base[DIFF_COL] = compute_diff_col(
+                base[EXTRACTION_NAME_COL],
+                base[EXTRACTION_ADDRESS_COL],
+                base[ICM_ADDRESS_COL],
+            )
             records.append(base)
             continue
 
         matched += 1
         base[ICM_DROPDOWN_COL] = canonical_name
         base[ICM_ADDRESS_COL] = address
-        base[DIFF_COL] = compute_diff_col(base[EXTRACTION_NAME_COL], base[EXTRACTION_ADDRESS_COL], base[ICM_ADDRESS_COL])
+        base[DIFF_COL] = compute_diff_col(
+            base[EXTRACTION_NAME_COL],
+            base[EXTRACTION_ADDRESS_COL],
+            base[ICM_ADDRESS_COL],
+        )
         records.append(base)
 
-    print(f"Extraction rows       : {len(extraction_df)}")
-    print(f"Matched               : {matched}")
-    print(f"No unique values match: {hop1_misses}")
-    print(f"No ICM match          : {hop2_misses}")
-    print(f"Null name (skipped)   : {null_name}")
+    logger.info(f"Extraction rows       : {len(extraction_df)}")
+    logger.info(f"Matched               : {matched}")
+    logger.info(f"No unique values match: {hop1_misses}")
+    logger.info(f"No ICM match          : {hop2_misses}")
+    logger.info(f"Null name (skipped)   : {null_name}")
 
     return pd.DataFrame(records, columns=OUTPUT_COLS)
 
@@ -179,6 +199,7 @@ def run(
     unique_values_sheet: str,
     icm_sheet: str,
 ) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     extraction_df = load_extraction(extraction_path, extraction_sheet)
     unique_values_df = load_unique_values(masterlist_path, unique_values_sheet)
     icm_df = load_icm(masterlist_path, icm_sheet)
@@ -187,10 +208,10 @@ def run(
 
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / f"{Path(extraction_path).stem}_validated.xlsx"
+    output_path = output_dir / f"{EXTRACTION_NAME_COL}_{timestamp}.xlsx"
     output_df.to_excel(output_path, index=False)
 
-    print(f"Output saved to       : {output_path}")
+    logger.info(f"Output saved to       : {output_path}")
     return output_path
 
 
@@ -218,6 +239,10 @@ if __name__ == "__main__":
         help="Sheet name for the ICM master data (default: 'ICMCollinsLegalEntityMaster').",
     )
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
     try:
         run(
             args.extraction,
@@ -227,5 +252,5 @@ if __name__ == "__main__":
             args.masterlist_sheet,
         )
     except (ValueError, FileNotFoundError) as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         sys.exit(1)
