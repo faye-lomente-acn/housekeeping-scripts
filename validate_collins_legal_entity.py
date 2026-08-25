@@ -80,9 +80,9 @@ def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
 
 def normalize_address(addr: str) -> str:
     addr = addr.lower().strip()
-    addr = re.sub(r',?\s*(united states|u\.?s\.?a?)\s*$', '', addr)
-    addr = re.sub(r',\s*', ', ', addr).strip(', ')
-    addr = re.sub(r'\s+', ' ', addr)
+    addr = re.sub(r",?\s*(united states|u\.?s\.?a?)\s*$", "", addr)
+    addr = re.sub(r",\s*", ", ", addr).strip(", ")
+    addr = re.sub(r"\s+", " ", addr)
     return addr
 
 
@@ -94,8 +94,10 @@ def compute_diff_col(name: str, extracted: str, icm: str) -> str:
         return ""
     if has_name and not a and not b:
         return "Empty Address"
-    ratio = difflib.SequenceMatcher(None, normalize_address(a), normalize_address(b)).ratio()
-    return "No" if ratio >= 0.85 else "Yes"
+    ratio = difflib.SequenceMatcher(
+        None, normalize_address(a), normalize_address(b)
+    ).ratio()
+    return "No" if ratio >= 0.80 else "Yes"
 
 
 def lookup_mapped_name(extracted_name: str, unique_values_df: pd.DataFrame) -> str:
