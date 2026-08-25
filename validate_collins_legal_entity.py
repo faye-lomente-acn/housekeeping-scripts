@@ -111,9 +111,17 @@ def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
     unique_addresses = rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().unique()
     CORP_TRUST = "the corporation trust company"
     non_trust = rows[ICM_ADDRESS_COL].dropna()[
-        ~rows[ICM_ADDRESS_COL].dropna().str.strip().str.lower().str.contains(CORP_TRUST, regex=False)
+        ~rows[ICM_ADDRESS_COL]
+        .dropna()
+        .str.strip()
+        .str.lower()
+        .str.contains(CORP_TRUST, regex=False)
     ]
-    if len(unique_addresses) == 2 and len(non_trust) > 0 and len(non_trust) < len(rows[ICM_ADDRESS_COL].dropna()):
+    if (
+        len(unique_addresses) == 2
+        and len(non_trust) > 0
+        and len(non_trust) < len(rows[ICM_ADDRESS_COL].dropna())
+    ):
         address = non_trust.iloc[0]
     elif len(unique_addresses) <= 1:
         address = (
@@ -122,7 +130,7 @@ def resolve_icm(mapped_name: str, icm_df: pd.DataFrame) -> tuple:
             else ""
         )
     else:
-        address = MULTIPLE_ADDRESSES
+        address = f"Entity has multiple ({len(unique_addresses)}) unique addresses in masterlist."
     return (canonical_name, address)
 
 
@@ -212,7 +220,9 @@ def run(
     logger.info("=" * 50)
     logger.info("Collins Legal Entity Validator")
     logger.info(f"Extraction : {extraction_path}  [{extraction_sheet}]")
-    logger.info(f"Masterlist : {masterlist_path}  [{unique_values_sheet} | {icm_sheet}]")
+    logger.info(
+        f"Masterlist : {masterlist_path}  [{unique_values_sheet} | {icm_sheet}]"
+    )
     logger.info("=" * 50)
 
     logger.info("Loading extraction file...")
