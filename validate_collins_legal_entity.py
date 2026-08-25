@@ -1,6 +1,7 @@
 import argparse
 import difflib
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -77,6 +78,14 @@ def load_icm(path: str, sheet_name: str) -> pd.DataFrame:
     return df
 
 
+def normalize_address(addr: str) -> str:
+    addr = addr.lower().strip()
+    addr = re.sub(r',?\s*(united states|u\.?s\.?a?)\s*$', '', addr)
+    addr = re.sub(r',\s*', ', ', addr).strip(', ')
+    addr = re.sub(r'\s+', ' ', addr)
+    return addr
+
+
 def compute_diff_col(name: str, extracted: str, icm: str) -> str:
     has_name = isinstance(name, str) and bool(name.strip())
     a = extracted.strip() if isinstance(extracted, str) else ""
@@ -85,7 +94,7 @@ def compute_diff_col(name: str, extracted: str, icm: str) -> str:
         return ""
     if has_name and not a and not b:
         return "Empty Address"
-    ratio = difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    ratio = difflib.SequenceMatcher(None, normalize_address(a), normalize_address(b)).ratio()
     return "No" if ratio >= 0.85 else "Yes"
 
 
