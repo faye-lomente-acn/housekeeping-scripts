@@ -216,8 +216,8 @@ if __name__ == "__main__":
     parser.add_argument("masterlist", help="Path to the masterlist Excel file.")
     parser.add_argument(
         "--extraction-sheet",
-        default="Sheet1",
-        help="Sheet name in the extraction file (default: 'Sheet1').",
+        default="Execution Report",
+        help="Sheet name in the extraction file (default: 'Execution Report').",
     )
     parser.add_argument(
         "--masterlist-sheet",
