@@ -224,7 +224,29 @@ if __name__ == "__main__":
         default="ICMCustomerLegalEntityMaster",
         help="Sheet name for the ICM customer master data (default: 'ICMCustomerLegalEntityMaster').",
     )
+    parser.add_argument(
+        "--extraction-name-col",
+        default="OtherPartyLegalEntity1Name",
+        help="Column name for the extracted other party legal entity name (default: 'OtherPartyLegalEntity1Name').",
+    )
+    parser.add_argument(
+        "--extraction-address-col",
+        default="OtherParty1FullAddress",
+        help="Column name for the extracted other party full address (default: 'OtherParty1FullAddress').",
+    )
     args = parser.parse_args()
+
+    EXTRACTION_NAME_COL = args.extraction_name_col
+    EXTRACTION_ADDRESS_COL = args.extraction_address_col
+    OUTPUT_COLS[:] = [
+        EXTRACTION_BLOB_COL,
+        EXTRACTION_ROWKEY_COL,
+        EXTRACTION_NAME_COL,
+        EXTRACTION_ADDRESS_COL,
+        OUT_NAME_COL,
+        OUT_ADDRESS_COL,
+        DIFF_COL,
+    ]
 
     logging.basicConfig(
         level=logging.INFO,
