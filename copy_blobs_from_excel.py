@@ -7,15 +7,14 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 
 DEFAULT_SHEET_NAME = "license"
-ACCOUNT_URL_ENV = "AZURE_STORAGE_ACCOUNT_URL"
+SRC_CONNECTION_STRING_ENV = "AZURE_STORAGE_CONNECTION_STRING"
+DEST_CONNECTION_STRING_ENV = "DEST_STORAGE_CONNECTION_STRING"
 SOURCE_CONTAINER_ENV = "SOURCE_CONTAINER"
 DEST_CONTAINER_ENV = "DEST_CONTAINER"
-DEST_ACCOUNT_URL_ENV = "DEST_ACCOUNT_URL"
 
 logger = logging.getLogger(__name__)
 
@@ -61,18 +60,17 @@ def copy_blobs(
     records: list[dict],
     ocr_input_folder: str,
     extraction_output_folder: str,
-    src_account_url: str,
+    src_connection_string: str,
     src_container: str,
-    dst_account_url: str,
+    dst_connection_string: str,
     dst_container: str,
     dest_folder: str,
     dry_run: bool,
 ) -> tuple[int, int, Path]:
-    credential = DefaultAzureCredential()
-    src_client = BlobServiceClient(account_url=src_account_url, credential=credential)
+    src_client = BlobServiceClient.from_connection_string(src_connection_string)
     dst_client = (
-        BlobServiceClient(account_url=dst_account_url, credential=credential)
-        if dst_account_url != src_account_url
+        BlobServiceClient.from_connection_string(dst_connection_string)
+        if dst_connection_string != src_connection_string
         else src_client
     )
 
@@ -165,12 +163,11 @@ def copy_blobs(
 
 
 def run(args: argparse.Namespace) -> None:
-    account_url = os.environ.get(ACCOUNT_URL_ENV)
-    if not account_url:
+    src_connection_string = os.environ.get(SRC_CONNECTION_STRING_ENV)
+    if not src_connection_string:
         raise ValueError(
-            f"Environment variable '{ACCOUNT_URL_ENV}' is not set. "
-            "Set it to the source storage account URL "
-            "(e.g. https://<account>.blob.core.windows.net)."
+            f"Environment variable '{SRC_CONNECTION_STRING_ENV}' is not set. "
+            "Set it to the source storage account connection string."
         )
     source_container = os.environ.get(SOURCE_CONTAINER_ENV)
     if not source_container:
@@ -178,16 +175,16 @@ def run(args: argparse.Namespace) -> None:
     dest_container = os.environ.get(DEST_CONTAINER_ENV)
     if not dest_container:
         raise ValueError(f"Environment variable '{DEST_CONTAINER_ENV}' is not set.")
-    dst_account_url = os.environ.get(DEST_ACCOUNT_URL_ENV) or account_url
+    dst_connection_string = os.environ.get(DEST_CONNECTION_STRING_ENV) or src_connection_string
 
     records = load_blob_records(args.input_file, args.sheet_name)
     success, failure, _ = copy_blobs(
         records=records,
         ocr_input_folder=args.ocr_input_blob_folder,
         extraction_output_folder=args.extraction_output_blob_folder,
-        src_account_url=account_url,
+        src_connection_string=src_connection_string,
         src_container=source_container,
-        dst_account_url=dst_account_url,
+        dst_connection_string=dst_connection_string,
         dst_container=dest_container,
         dest_folder=args.dest_folder,
         dry_run=args.dry_run,
