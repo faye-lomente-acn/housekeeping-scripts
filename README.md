@@ -88,7 +88,6 @@ Output saved to: input\contracts_cleaned.xlsx
 ```bash
 # Dry-run first to verify paths without copying
 python copy_blobs_from_excel.py license.xlsx \
-  --account-url https://myaccount.blob.core.windows.net \
   --source-container mycontainer \
   --dest-container mycontainer \
   --dest-folder archive/2026 \
@@ -98,7 +97,6 @@ python copy_blobs_from_excel.py license.xlsx \
 
 # Real copy
 python copy_blobs_from_excel.py license.xlsx \
-  --account-url https://myaccount.blob.core.windows.net \
   --source-container mycontainer \
   --dest-container mycontainer \
   --dest-folder archive/2026 \
