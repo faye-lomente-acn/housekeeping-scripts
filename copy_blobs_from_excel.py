@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 
 import pandas as pd
@@ -7,6 +8,7 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
 DEFAULT_SHEET_NAME = "license"
+ACCOUNT_URL_ENV = "AZURE_STORAGE_ACCOUNT_URL"
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +102,20 @@ def copy_blobs(
 
 
 def run(args: argparse.Namespace) -> None:
+    account_url = os.environ.get(ACCOUNT_URL_ENV)
+    if not account_url:
+        raise ValueError(
+            f"Environment variable '{ACCOUNT_URL_ENV}' is not set. "
+            "Set it to the source storage account URL "
+            "(e.g. https://<account>.blob.core.windows.net)."
+        )
     records = load_blob_records(args.input_file, args.sheet_name)
-    dst_account_url = args.dest_account_url or args.account_url
+    dst_account_url = args.dest_account_url or account_url
     success, failure = copy_blobs(
         records=records,
         ocr_input_folder=args.ocr_input_blob_folder,
         extraction_output_folder=args.extraction_output_blob_folder,
-        src_account_url=args.account_url,
+        src_account_url=account_url,
         src_container=args.source_container,
         dst_account_url=dst_account_url,
         dst_container=args.dest_container,
@@ -123,11 +132,6 @@ if __name__ == "__main__":
         description="Copy blobs listed in an Excel file to a new folder in Azure Blob Storage."
     )
     parser.add_argument("input_file", help="Path to the input .xlsx file")
-    parser.add_argument(
-        "--account-url",
-        required=True,
-        help="Source storage account URL (e.g. https://<account>.blob.core.windows.net)",
-    )
     parser.add_argument("--source-container", required=True, help="Source blob container name")
     parser.add_argument("--dest-container", required=True, help="Destination blob container name")
     parser.add_argument(

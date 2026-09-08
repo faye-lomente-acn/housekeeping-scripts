@@ -36,10 +36,11 @@ Reads blob records from an Excel file, derives source and destination blob paths
 
 **Arguments:**
 
+The source storage account URL is read from the `AZURE_STORAGE_ACCOUNT_URL` environment variable (required).
+
 | Argument | Required | Default | Description |
 |---|---|---|---|
 | `input_file` | yes | — | Path to the `.xlsx` file |
-| `--account-url` | yes | — | Source storage account URL (e.g. `https://<account>.blob.core.windows.net`) |
 | `--source-container` | yes | — | Source blob container name |
 | `--dest-container` | yes | — | Destination blob container name |
 | `--dest-folder` | yes | — | Folder prefix in the destination (e.g. `archive/2026`) |
