@@ -16,13 +16,23 @@ Strips trailing sequence numbers from `CollinsOrOtherPartyContractID` values.
 
 ### `copy_blobs_from_excel.py`
 
-Reads blob paths from an Excel file and copies each blob to a new folder in Azure Blob Storage using a server-side copy (no local download).
+Reads blob records from an Excel file, derives source and destination blob paths, and copies each blob to a new folder in Azure Blob Storage using a server-side copy (no local download).
 
-**Problem it solves:** Bulk-copying a list of blobs to a new destination folder without manual Azure portal work.
+**Problem it solves:** Bulk-copying a list of blobs to a new destination folder without manual Azure portal work. Source paths are derived from the extraction output folder rather than read verbatim from the spreadsheet.
 
-**Input:** Any `.xlsx` file with a column of blob paths (defaults to `InputBlobPath` in a sheet named `license`).
+**Input:** Any `.xlsx` file (default sheet: `license`) containing these columns:
 
-**Output:** Each blob is copied to `{dest-folder}/{original-blob-path}` in the destination container, preserving the original folder structure under the new prefix.
+| Column | Description |
+|---|---|
+| `InputBlobPath` | Full OCR input blob path — used to extract the sub-folder name |
+| `RowKey` | Row key of the record |
+| `Filename` | Original filename of the blob |
+
+**How paths are built:**
+1. Strip the `--ocr-input-blob-folder` prefix from `InputBlobPath` to get the sub-folder name.
+2. Build the blob filename as `{RowKey}__{Filename}`.
+3. **Source:** `{extraction-output-blob-folder}/{sub-folder}/{RowKey}__{Filename}`
+4. **Destination:** `{dest-folder}/{sub-folder}/{RowKey}__{Filename}`
 
 **Arguments:**
 
@@ -33,9 +43,10 @@ Reads blob paths from an Excel file and copies each blob to a new folder in Azur
 | `--source-container` | yes | — | Source blob container name |
 | `--dest-container` | yes | — | Destination blob container name |
 | `--dest-folder` | yes | — | Folder prefix in the destination (e.g. `archive/2026`) |
+| `--ocr-input-blob-folder` | yes | — | OCR input blob folder path (used to extract the sub-folder name from `InputBlobPath`) |
+| `--extraction-output-blob-folder` | yes | — | Extraction output blob folder path (used as the source blob prefix) |
 | `--dest-account-url` | no | same as `--account-url` | Destination account URL for cross-account copies |
 | `--sheet-name` | no | `license` | Sheet name in the Excel file |
-| `--blob-path-col` | no | `InputBlobPath` | Column containing blob paths |
 | `--dry-run` | no | off | Log what would be copied without copying |
 
 Authentication uses `DefaultAzureCredential` — no secrets are passed on the command line. Ensure the identity running the script has the **Storage Blob Data Contributor** role on both the source and destination containers.
@@ -80,6 +91,8 @@ python copy_blobs_from_excel.py license.xlsx \
   --source-container mycontainer \
   --dest-container mycontainer \
   --dest-folder archive/2026 \
+  --ocr-input-blob-folder ocr-input/documents \
+  --extraction-output-blob-folder extraction-output/results \
   --dry-run
 
 # Real copy
@@ -87,7 +100,9 @@ python copy_blobs_from_excel.py license.xlsx \
   --account-url https://myaccount.blob.core.windows.net \
   --source-container mycontainer \
   --dest-container mycontainer \
-  --dest-folder archive/2026
+  --dest-folder archive/2026 \
+  --ocr-input-blob-folder ocr-input/documents \
+  --extraction-output-blob-folder extraction-output/results
 ```
 
 ## Notes

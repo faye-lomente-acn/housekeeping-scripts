@@ -1,33 +1,57 @@
 import argparse
 import logging
 import sys
-from pathlib import Path
 
 import pandas as pd
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 
 DEFAULT_SHEET_NAME = "license"
-DEFAULT_BLOB_PATH_COL = "InputBlobPath"
 
 logger = logging.getLogger(__name__)
 
 
-def load_blob_paths(path: str, sheet_name: str, col_name: str) -> list[str]:
+def load_blob_records(path: str, sheet_name: str) -> list[dict]:
     df = pd.read_excel(path, sheet_name=sheet_name, dtype=str)
-    if col_name not in df.columns:
+    for col in ("InputBlobPath", "RowKey", "Filename"):
+        if col not in df.columns:
+            raise ValueError(
+                f"Column '{col}' not found in sheet '{sheet_name}'. "
+                f"Available columns: {list(df.columns)}"
+            )
+    df = df[["InputBlobPath", "RowKey", "Filename"]].dropna(how="any")
+    df = df[df["InputBlobPath"].str.strip() != ""]
+    logger.info("Loaded %d records from '%s'", len(df), path)
+    return df.to_dict("records")
+
+
+def derive_paths(
+    record: dict,
+    ocr_input_folder: str,
+    extraction_output_folder: str,
+    dest_folder: str,
+) -> tuple[str, str]:
+    input_blob_path = record["InputBlobPath"].strip().strip("/")
+    prefix = ocr_input_folder.strip().strip("/")
+    if not input_blob_path.startswith(prefix):
         raise ValueError(
-            f"Column '{col_name}' not found in sheet '{sheet_name}'. "
-            f"Available columns: {list(df.columns)}"
+            f"InputBlobPath '{input_blob_path}' does not start with "
+            f"ocr-input-blob-folder '{prefix}'"
         )
-    paths = df[col_name].str.strip().dropna()
-    paths = paths[paths != ""].tolist()
-    logger.info("Loaded %d blob paths from '%s'", len(paths), path)
-    return paths
+    relative = input_blob_path[len(prefix):].strip("/")
+    folder_name = relative.split("/")[0]
+
+    blob_filename = f"{record['RowKey'].strip()}__{record['Filename'].strip()}"
+
+    src = f"{extraction_output_folder.strip().strip('/')}/{folder_name}/{blob_filename}"
+    dst = f"{dest_folder.strip().strip('/')}/{folder_name}/{blob_filename}"
+    return src, dst
 
 
 def copy_blobs(
-    blob_paths: list[str],
+    records: list[dict],
+    ocr_input_folder: str,
+    extraction_output_folder: str,
     src_account_url: str,
     src_container: str,
     dst_account_url: str,
@@ -44,30 +68,44 @@ def copy_blobs(
     )
 
     success, failure = 0, 0
-    for blob_path in blob_paths:
-        dst_name = f"{dest_folder}/{blob_path}"
+    for record in records:
+        try:
+            src_name, dst_name = derive_paths(
+                record, ocr_input_folder, extraction_output_folder, dest_folder
+            )
+        except ValueError as exc:
+            logger.warning("Skipping record %s: %s", record, exc)
+            failure += 1
+            continue
+
         if dry_run:
-            logger.info("[DRY RUN] Would copy: %s -> %s/%s", blob_path, dst_container, dst_name)
+            logger.info(
+                "[DRY RUN] Would copy: %s/%s -> %s/%s",
+                src_container, src_name, dst_container, dst_name,
+            )
             success += 1
             continue
+
         try:
-            src_blob = src_client.get_blob_client(container=src_container, blob=blob_path)
+            src_blob = src_client.get_blob_client(container=src_container, blob=src_name)
             dst_blob = dst_client.get_blob_client(container=dst_container, blob=dst_name)
             dst_blob.start_copy_from_url(src_blob.url)
-            logger.info("Copied: %s -> %s/%s", blob_path, dst_container, dst_name)
+            logger.info("Copied: %s/%s -> %s/%s", src_container, src_name, dst_container, dst_name)
             success += 1
         except Exception as exc:
-            logger.warning("Failed to copy '%s': %s", blob_path, exc)
+            logger.warning("Failed to copy '%s': %s", src_name, exc)
             failure += 1
 
     return success, failure
 
 
 def run(args: argparse.Namespace) -> None:
-    blob_paths = load_blob_paths(args.input_file, args.sheet_name, args.blob_path_col)
+    records = load_blob_records(args.input_file, args.sheet_name)
     dst_account_url = args.dest_account_url or args.account_url
     success, failure = copy_blobs(
-        blob_paths=blob_paths,
+        records=records,
+        ocr_input_folder=args.ocr_input_blob_folder,
+        extraction_output_folder=args.extraction_output_blob_folder,
         src_account_url=args.account_url,
         src_container=args.source_container,
         dst_account_url=dst_account_url,
@@ -98,6 +136,16 @@ if __name__ == "__main__":
         help="Destination folder prefix (e.g. 'archive/2026')",
     )
     parser.add_argument(
+        "--ocr-input-blob-folder",
+        required=True,
+        help="OCR input blob folder path used to extract the sub-folder name from InputBlobPath",
+    )
+    parser.add_argument(
+        "--extraction-output-blob-folder",
+        required=True,
+        help="Extraction output blob folder path used as the source blob prefix",
+    )
+    parser.add_argument(
         "--dest-account-url",
         default=None,
         help="Destination storage account URL for cross-account copies (defaults to --account-url)",
@@ -106,11 +154,6 @@ if __name__ == "__main__":
         "--sheet-name",
         default=DEFAULT_SHEET_NAME,
         help=f"Sheet name in the Excel file (default: '{DEFAULT_SHEET_NAME}')",
-    )
-    parser.add_argument(
-        "--blob-path-col",
-        default=DEFAULT_BLOB_PATH_COL,
-        help=f"Column name containing blob paths (default: '{DEFAULT_BLOB_PATH_COL}')",
     )
     parser.add_argument(
         "--dry-run",
