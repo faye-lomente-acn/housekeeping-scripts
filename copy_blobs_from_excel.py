@@ -1,7 +1,10 @@
 import argparse
+import csv
 import logging
 import os
 import sys
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from azure.identity import DefaultAzureCredential
@@ -44,7 +47,7 @@ def derive_paths(
             f"InputBlobPath '{input_blob_path}' does not start with "
             f"ocr-input-blob-folder '{prefix}'"
         )
-    relative = input_blob_path[len(prefix):].strip("/")
+    relative = input_blob_path[len(prefix) :].strip("/")
     folder_name = relative.split("/")[0]
 
     blob_filename = f"{record['RowKey'].strip()}__{record['Filename'].strip()}"
@@ -64,7 +67,7 @@ def copy_blobs(
     dst_container: str,
     dest_folder: str,
     dry_run: bool,
-) -> tuple[int, int]:
+) -> tuple[int, int, Path]:
     credential = DefaultAzureCredential()
     src_client = BlobServiceClient(account_url=src_account_url, credential=credential)
     dst_client = (
@@ -74,35 +77,91 @@ def copy_blobs(
     )
 
     success, failure = 0, 0
+    results: list[dict] = []
     for record in records:
+        result = {
+            "InputBlobPath": record["InputBlobPath"],
+            "RowKey": record["RowKey"],
+            "Filename": record["Filename"],
+            "SourceBlob": "",
+            "DestinationBlob": "",
+            "Status": "",
+            "Error": "",
+        }
+
         try:
             src_name, dst_name = derive_paths(
                 record, ocr_input_folder, extraction_output_folder, dest_folder
             )
         except ValueError as exc:
             logger.warning("Skipping record %s: %s", record, exc)
+            result["Status"] = "FAILED"
+            result["Error"] = str(exc)
             failure += 1
+            results.append(result)
             continue
+
+        result["SourceBlob"] = src_name
+        result["DestinationBlob"] = dst_name
 
         if dry_run:
             logger.info(
                 "[DRY RUN] Would copy: %s/%s -> %s/%s",
-                src_container, src_name, dst_container, dst_name,
+                src_container,
+                src_name,
+                dst_container,
+                dst_name,
             )
+            result["Status"] = "SUCCESS"
             success += 1
+            results.append(result)
             continue
 
         try:
-            src_blob = src_client.get_blob_client(container=src_container, blob=src_name)
-            dst_blob = dst_client.get_blob_client(container=dst_container, blob=dst_name)
+            src_blob = src_client.get_blob_client(
+                container=src_container, blob=src_name
+            )
+            dst_blob = dst_client.get_blob_client(
+                container=dst_container, blob=dst_name
+            )
             dst_blob.start_copy_from_url(src_blob.url)
-            logger.info("Copied: %s/%s -> %s/%s", src_container, src_name, dst_container, dst_name)
+            logger.info(
+                "Copied: %s/%s -> %s/%s",
+                src_container,
+                src_name,
+                dst_container,
+                dst_name,
+            )
+            result["Status"] = "SUCCESS"
             success += 1
         except Exception as exc:
             logger.warning("Failed to copy '%s': %s", src_name, exc)
+            result["Status"] = "FAILED"
+            result["Error"] = str(exc)
             failure += 1
 
-    return success, failure
+        results.append(result)
+
+    report_dir = Path("report")
+    report_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"copy_report_{timestamp}.csv"
+    fieldnames = [
+        "InputBlobPath",
+        "RowKey",
+        "Filename",
+        "SourceBlob",
+        "DestinationBlob",
+        "Status",
+        "Error",
+    ]
+    with report_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+    logger.info("Report saved to %s", report_path)
+
+    return success, failure, report_path
 
 
 def run(args: argparse.Namespace) -> None:
@@ -122,7 +181,7 @@ def run(args: argparse.Namespace) -> None:
     dst_account_url = os.environ.get(DEST_ACCOUNT_URL_ENV) or account_url
 
     records = load_blob_records(args.input_file, args.sheet_name)
-    success, failure = copy_blobs(
+    success, failure, _ = copy_blobs(
         records=records,
         ocr_input_folder=args.ocr_input_blob_folder,
         extraction_output_folder=args.extraction_output_blob_folder,
@@ -171,7 +230,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     try:
         run(args)
