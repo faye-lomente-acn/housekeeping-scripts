@@ -6,9 +6,13 @@ import sys
 import pandas as pd
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
+from dotenv import load_dotenv
 
 DEFAULT_SHEET_NAME = "license"
 ACCOUNT_URL_ENV = "AZURE_STORAGE_ACCOUNT_URL"
+SOURCE_CONTAINER_ENV = "SOURCE_CONTAINER"
+DEST_CONTAINER_ENV = "DEST_CONTAINER"
+DEST_ACCOUNT_URL_ENV = "DEST_ACCOUNT_URL"
 
 logger = logging.getLogger(__name__)
 
@@ -109,16 +113,23 @@ def run(args: argparse.Namespace) -> None:
             "Set it to the source storage account URL "
             "(e.g. https://<account>.blob.core.windows.net)."
         )
+    source_container = os.environ.get(SOURCE_CONTAINER_ENV)
+    if not source_container:
+        raise ValueError(f"Environment variable '{SOURCE_CONTAINER_ENV}' is not set.")
+    dest_container = os.environ.get(DEST_CONTAINER_ENV)
+    if not dest_container:
+        raise ValueError(f"Environment variable '{DEST_CONTAINER_ENV}' is not set.")
+    dst_account_url = os.environ.get(DEST_ACCOUNT_URL_ENV) or account_url
+
     records = load_blob_records(args.input_file, args.sheet_name)
-    dst_account_url = args.dest_account_url or account_url
     success, failure = copy_blobs(
         records=records,
         ocr_input_folder=args.ocr_input_blob_folder,
         extraction_output_folder=args.extraction_output_blob_folder,
         src_account_url=account_url,
-        src_container=args.source_container,
+        src_container=source_container,
         dst_account_url=dst_account_url,
-        dst_container=args.dest_container,
+        dst_container=dest_container,
         dest_folder=args.dest_folder,
         dry_run=args.dry_run,
     )
@@ -128,12 +139,11 @@ def run(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    load_dotenv()
     parser = argparse.ArgumentParser(
         description="Copy blobs listed in an Excel file to a new folder in Azure Blob Storage."
     )
     parser.add_argument("input_file", help="Path to the input .xlsx file")
-    parser.add_argument("--source-container", required=True, help="Source blob container name")
-    parser.add_argument("--dest-container", required=True, help="Destination blob container name")
     parser.add_argument(
         "--dest-folder",
         required=True,
@@ -148,11 +158,6 @@ if __name__ == "__main__":
         "--extraction-output-blob-folder",
         required=True,
         help="Extraction output blob folder path used as the source blob prefix",
-    )
-    parser.add_argument(
-        "--dest-account-url",
-        default=None,
-        help="Destination storage account URL for cross-account copies (defaults to --account-url)",
     )
     parser.add_argument(
         "--sheet-name",
