@@ -34,19 +34,32 @@ Reads blob records from an Excel file, derives source and destination blob paths
 3. **Source:** `{extraction-output-blob-folder}/{sub-folder}/{RowKey}__{Filename}`
 4. **Destination:** `{dest-folder}/{sub-folder}/{RowKey}__{Filename}`
 
-**Arguments:**
+**Environment variables (`.env` file):**
 
-The source storage account URL is read from the `AZURE_STORAGE_ACCOUNT_URL` environment variable (required).
+| Variable | Required | Description |
+|---|---|---|
+| `AZURE_STORAGE_ACCOUNT_URL` | yes | Source storage account URL (e.g. `https://<account>.blob.core.windows.net`) |
+| `SOURCE_CONTAINER` | yes | Source blob container name |
+| `DEST_CONTAINER` | yes | Destination blob container name |
+| `DEST_ACCOUNT_URL` | no | Destination account URL for cross-account copies (defaults to `AZURE_STORAGE_ACCOUNT_URL`) |
+
+Copy `.env` from the template and fill in your values:
+
+```
+AZURE_STORAGE_ACCOUNT_URL=https://<account>.blob.core.windows.net
+SOURCE_CONTAINER=<source-container-name>
+DEST_CONTAINER=<destination-container-name>
+DEST_ACCOUNT_URL=
+```
+
+**Arguments:**
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
 | `input_file` | yes | — | Path to the `.xlsx` file |
-| `--source-container` | yes | — | Source blob container name |
-| `--dest-container` | yes | — | Destination blob container name |
 | `--dest-folder` | yes | — | Folder prefix in the destination (e.g. `archive/2026`) |
 | `--ocr-input-blob-folder` | yes | — | OCR input blob folder path (used to extract the sub-folder name from `InputBlobPath`) |
 | `--extraction-output-blob-folder` | yes | — | Extraction output blob folder path (used as the source blob prefix) |
-| `--dest-account-url` | no | same as `--account-url` | Destination account URL for cross-account copies |
 | `--sheet-name` | no | `license` | Sheet name in the Excel file |
 | `--dry-run` | no | off | Log what would be copied without copying |
 
@@ -85,11 +98,11 @@ Output saved to: input\contracts_cleaned.xlsx
 
 ### `copy_blobs_from_excel.py`
 
+Populate `.env` with your storage account and container names, then:
+
 ```bash
 # Dry-run first to verify paths without copying
 python copy_blobs_from_excel.py license.xlsx \
-  --source-container mycontainer \
-  --dest-container mycontainer \
   --dest-folder archive/2026 \
   --ocr-input-blob-folder ocr-input/documents \
   --extraction-output-blob-folder extraction-output/results \
@@ -97,8 +110,6 @@ python copy_blobs_from_excel.py license.xlsx \
 
 # Real copy
 python copy_blobs_from_excel.py license.xlsx \
-  --source-container mycontainer \
-  --dest-container mycontainer \
   --dest-folder archive/2026 \
   --ocr-input-blob-folder ocr-input/documents \
   --extraction-output-blob-folder extraction-output/results
